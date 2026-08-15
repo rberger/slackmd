@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from .core import markdown_to_mrkdwn
 from .sources import route
 
 
@@ -62,6 +63,18 @@ def main(argv: list[str] | None = None) -> int:
         "--copy", action="store_true", help="Write the Markdown back to the clipboard"
     )
 
+    ts = sub.add_parser(
+        "to-slack", help="Convert Markdown (clipboard plain text) to Slack mrkdwn"
+    )
+    ts.add_argument(
+        "--copy", action="store_true", help="Write the mrkdwn back to the clipboard"
+    )
+    ts.add_argument(
+        "--no-escape",
+        action="store_true",
+        help="Do not entity-escape & < > (for pasting into the composer)",
+    )
+
     args = parser.parse_args(argv)
 
     if args.cmd == "from-slack":
@@ -77,6 +90,20 @@ def main(argv: list[str] | None = None) -> int:
             _write_clipboard_text(conv.markdown)
         print(conv.markdown)
         print(f"[source: {conv.source}]", file=sys.stderr)
+        return 0
+
+    if args.cmd == "to-slack":
+        from AppKit import NSPasteboard
+
+        pb = NSPasteboard.generalPasteboard()
+        md = pb.stringForType_("public.utf8-plain-text")
+        if not md:
+            print("No Markdown text on the clipboard.", file=sys.stderr)
+            return 1
+        out = markdown_to_mrkdwn(md, escape=not args.no_escape)
+        if args.copy:
+            _write_clipboard_text(out)
+        print(out)
         return 0
 
     parser.print_help()

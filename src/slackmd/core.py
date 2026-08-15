@@ -172,9 +172,134 @@ def mrkdwn_to_markdown(text: str) -> str:
     raise NotImplementedError("Phase 2/4")
 
 
-def markdown_to_mrkdwn(md: str) -> str:
-    """Convert CommonMark into Slack ``mrkdwn`` text, a paste target (Phase 3)."""
-    raise NotImplementedError("Phase 3")
+def _mrkdwn_escape(s: str) -> str:
+    # Slack mrkdwn control chars, escaped as HTML entities (required for the API).
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def markdown_to_mrkdwn(md: str, *, escape: bool = True) -> str:
+    """Convert CommonMark into Slack ``mrkdwn`` text (Phase 3, reverse direction).
+
+    Documented degradations (docs/SPEC.md 4.3): headings -> ``*bold*`` line, links ->
+    ``<url|label>``, ``**``->``*`` and ``*``->``_``, bullets -> ``•``, single-level
+    blockquote, tables -> monospace block. Set ``escape=False`` to skip entity-escaping
+    ``& < >`` (useful when the result is meant to be pasted, not sent via the API).
+    """
+    from markdown_it import MarkdownIt
+    from markdown_it.tree import SyntaxTreeNode
+
+    esc = _mrkdwn_escape if escape else (lambda s: s)
+
+    def inline(node) -> str:
+        t = node.type
+        if t == "text":
+            return esc(node.content)
+        if t == "code_inline":
+            return f"`{node.content}`"
+        if t in ("softbreak", "hardbreak"):
+            return "\n"
+        if t == "strong":
+            return "*" + "".join(inline(c) for c in node.children) + "*"
+        if t == "em":
+            return "_" + "".join(inline(c) for c in node.children) + "_"
+        if t == "s":
+            return "~" + "".join(inline(c) for c in node.children) + "~"
+        if t == "link":
+            href = node.attrs.get("href", "")
+            label = "".join(inline(c) for c in node.children)
+            return f"<{href}|{label}>" if label and label != href else f"<{href}>"
+        if t == "image":
+            alt = node.attrs.get("alt") or "".join(inline(c) for c in node.children)
+            return esc(alt)
+        return "".join(inline(c) for c in node.children)
+
+    def inline_of(node) -> str:
+        # a block node whose first child is the "inline" container
+        for c in node.children:
+            if c.type == "inline":
+                return inline(c)
+        return "".join(inline(c) for c in node.children)
+
+    def list_item(node, depth: int, marker: str) -> str:
+        indent = "    " * depth
+        head_parts: list[str] = []
+        nested: list[str] = []
+        for c in node.children:
+            if c.type in ("bullet_list", "ordered_list"):
+                nested.append(block(c, depth + 1))
+            else:
+                head_parts.append(block(c, depth))
+        head = " ".join(p for p in head_parts if p).strip()
+        line = f"{indent}{marker}{head}"
+        if nested:
+            line += "\n" + "\n".join(nested)
+        return line
+
+    def block(node, depth: int = 0) -> str:
+        t = node.type
+        if t == "root":
+            return "\n\n".join(b for b in (block(c) for c in node.children) if b)
+        if t == "paragraph":
+            return inline_of(node)
+        if t == "heading":
+            return "*" + inline_of(node).strip() + "*"
+        if t == "hr":
+            return "──────────"
+        if t == "blockquote":
+            inner = "\n\n".join(b for b in (block(c, depth) for c in node.children) if b)
+            return "\n".join((f"> {ln}" if ln else ">") for ln in inner.split("\n"))
+        if t in ("fence", "code_block"):
+            return "```\n" + node.content.rstrip("\n") + "\n```"
+        if t == "bullet_list":
+            return "\n".join(list_item(c, depth, "• ") for c in node.children)
+        if t == "ordered_list":
+            start = int(node.attrs.get("start", 1) or 1)
+            return "\n".join(
+                list_item(c, depth, f"{start + i}. ") for i, c in enumerate(node.children)
+            )
+        if t == "table":
+            return _mrkdwn_table(node, esc)
+        if t == "inline":
+            return inline(node)
+        return "\n\n".join(b for b in (block(c, depth) for c in node.children) if b)
+
+    tree = SyntaxTreeNode(MarkdownIt("gfm-like").disable("linkify").parse(md))
+    return _tidy(block(tree))
+
+
+def _mrkdwn_table(node, esc) -> str:
+    # Slack has no table; render an aligned monospace block inside a code fence.
+    rows: list[list[str]] = []
+    for section in node.children:  # thead / tbody
+        for tr in section.children:
+            cells = []
+            for cell in tr.children:  # th / td
+                parts = []
+                for c in cell.children:
+                    if c.type == "inline":
+                        parts.append("".join(_plain(x) for x in c.children))
+                cells.append("".join(parts).strip())
+            rows.append(cells)
+    if not rows:
+        return ""
+    ncol = max(len(r) for r in rows)
+    widths = [0] * ncol
+    for r in rows:
+        for i, cell in enumerate(r):
+            widths[i] = max(widths[i], len(cell))
+    out = []
+    for r in rows:
+        padded = [r[i].ljust(widths[i]) if i < len(r) else " " * widths[i] for i in range(ncol)]
+        out.append("  ".join(padded).rstrip())
+    return "```\n" + "\n".join(out) + "\n```"
+
+
+def _plain(node) -> str:
+    if node.type == "text" or node.type == "code_inline":
+        return node.content
+    if node.type in ("softbreak", "hardbreak"):
+        return " "
+    return "".join(_plain(c) for c in node.children)
 
 
 def markdown_to_blockkit(md: str) -> list[dict]:
