@@ -182,12 +182,38 @@ def markdown_to_html(md: str) -> str:
 
     Pasting plain ``mrkdwn`` into Slack's WYSIWYG composer renders literally; pasting
     HTML makes the composer adopt the formatting (bold, links, lists, code, quotes).
+
+    Slack collapses a ``<br>`` inside a ``<blockquote>`` on paste, so multi-line quotes
+    are re-emitted as one ``<p>`` per line (which Slack keeps as separate quoted lines),
+    preserving inline markup within each line.
     """
+    from bs4 import BeautifulSoup
     from markdown_it import MarkdownIt
 
-    # breaks=True -> soft newlines become <br>, matching Slack's newline-as-line-break
-    # semantics (otherwise multi-line blockquotes/paragraphs collapse onto one line).
-    return MarkdownIt("gfm-like", {"breaks": True}).disable("linkify").render(md)
+    raw = MarkdownIt("gfm-like", {"breaks": True}).disable("linkify").render(md)
+    soup = BeautifulSoup(raw, "html.parser")
+
+    for bq in soup.find_all("blockquote"):
+        paras = bq.find_all("p", recursive=False) or [bq]
+        lines_html: list[str] = []
+        for p in paras:
+            cur = ""
+            for child in p.children:
+                if getattr(child, "name", None) == "br":
+                    if cur.strip():
+                        lines_html.append(cur.strip())
+                    cur = ""
+                else:
+                    cur += str(child)
+            if cur.strip():
+                lines_html.append(cur.strip())
+        if len(lines_html) <= 1:
+            continue  # single-line quote: leave as-is
+        inner = "".join(f"<p>{ln}</p>" for ln in lines_html)
+        new_bq = BeautifulSoup(f"<blockquote>{inner}</blockquote>", "html.parser")
+        bq.replace_with(*new_bq.children)
+
+    return str(soup)
 
 
 def markdown_to_mrkdwn(md: str, *, escape: bool = True) -> str:

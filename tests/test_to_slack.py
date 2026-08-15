@@ -70,6 +70,16 @@ def test_markdown_to_html_for_paste():
     assert "<ul>" in html and "<li>a</li>" in html
 
 
-def test_html_preserves_multiline_blockquote():
-    html = markdown_to_html("> a quoted line\n> a second quoted line")
-    assert "<br" in html  # soft newline preserved so Slack shows two quoted lines
+def test_html_multiline_blockquote_splits_into_paragraphs():
+    html = markdown_to_html("> a quoted line\n> a second **bold** line")
+    # Slack collapses <br> in quotes, so each line becomes its own <p> (no <br>),
+    # and inline markup within a line is preserved.
+    assert "<br" not in html
+    assert "<p>a quoted line</p>" in html
+    assert "<p>a second <strong>bold</strong> line</p>" in html
+    assert html.count("<blockquote>") == 1
+
+
+def test_html_singleline_blockquote_unchanged():
+    html = markdown_to_html("> just one line")
+    assert "<blockquote>" in html and "just one line" in html
