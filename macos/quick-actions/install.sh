@@ -212,14 +212,38 @@ make_service "slackmd: Markdown to Slack" "$CLI to-slack --copy"
 # to take effect, and an app-level shortcut can shadow it, so the manual assignment in
 # System Settings > Keyboard > Keyboard Shortcuts > Services is the reliable fallback.
 # key_equivalent modifiers: @ = cmd, ~ = option, $ = shift, ^ = control.
-bind_hotkey() {
-  local menu="$1" keq="$2"
-  local svc="(null) - $menu - runWorkflowAsService"
-  local plist="{ enabled_context_menu = 1; enabled_services_menu = 1; key_equivalent = \"$keq\"; presentation_modes = { ContextMenu = 1; ServicesMenu = 1; }; }"
-  defaults write pbs NSServicesStatus -dict-add "$svc" "$plist" 2>/dev/null || true
+# Pre-bind the recommended shortcuts by merging them into the pbs NSServicesStatus
+# dict, preserving any other Services shortcuts. `defaults -dict-add` cannot REPLACE an
+# existing key, so read-modify-write the whole dict via plistlib.
+# key_equivalent modifiers: @ = cmd, ~ = option, $ = shift, ^ = control.
+bind_hotkeys() {
+  local tmp; tmp="$(mktemp)"
+  defaults export pbs "$tmp" 2>/dev/null || printf '{}\n' > "$tmp"
+  "$REPO/.venv/bin/python" - "$tmp" <<'PY'
+import sys, plistlib
+path = sys.argv[1]
+try:
+    with open(path, "rb") as f:
+        d = plistlib.load(f)
+except Exception:
+    d = {}
+st = d.get("NSServicesStatus", {}) or {}
+def setk(name, keq):
+    st[f"(null) - {name} - runWorkflowAsService"] = {
+        "enabled_services_menu": True,
+        "presentation_modes": {"ServicesMenu": True},
+        "key_equivalent": keq,
+    }
+setk("slackmd: Slack to Markdown", "@~s")    # Cmd+Option+S
+setk("slackmd: Markdown to Slack", "@~^m")   # Ctrl+Cmd+Option+M (plain Cmd+M is minimize)
+d["NSServicesStatus"] = st
+with open(path, "wb") as f:
+    plistlib.dump(d, f)
+PY
+  defaults import pbs "$tmp"
+  rm -f "$tmp"
 }
-bind_hotkey "slackmd: Slack to Markdown" "@~s"    # Cmd+Option+S
-bind_hotkey "slackmd: Markdown to Slack" "@~^m"   # Ctrl+Cmd+Option+M (plain Cmd+M is minimize)
+bind_hotkeys
 
 # Nudge the services registry so the new Quick Actions appear.
 /System/Library/CoreServices/pbs -flush 2>/dev/null || true
