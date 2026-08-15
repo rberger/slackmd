@@ -218,15 +218,15 @@ bind_hotkey() {
   local plist="{ enabled_context_menu = 1; enabled_services_menu = 1; key_equivalent = \"$keq\"; presentation_modes = { ContextMenu = 1; ServicesMenu = 1; }; }"
   defaults write pbs NSServicesStatus -dict-add "$svc" "$plist" 2>/dev/null || true
 }
-bind_hotkey "slackmd: Slack to Markdown" "@~s"   # Cmd+Option+S
-bind_hotkey "slackmd: Markdown to Slack" "@~m"   # Cmd+Option+M
+bind_hotkey "slackmd: Slack to Markdown" "@~s"    # Cmd+Option+S
+bind_hotkey "slackmd: Markdown to Slack" "@~^m"   # Ctrl+Cmd+Option+M (plain Cmd+M is minimize)
 
 # Nudge the services registry so the new Quick Actions appear.
 /System/Library/CoreServices/pbs -flush 2>/dev/null || true
 
 echo
 if defaults read pbs NSServicesStatus 2>/dev/null | grep -q "slackmd"; then
-  echo "pre-bound shortcuts: Cmd+Option+S (Slack to Markdown), Cmd+Option+M (Markdown to Slack)."
+  echo "pre-bound shortcuts: Cmd+Option+S (Slack to Markdown), Ctrl+Cmd+Option+M (Markdown to Slack)."
   echo "If a shortcut is not active, set it in System Settings > Keyboard > Keyboard"
   echo "Shortcuts > Services > General (a logout may be needed for the pre-bind to apply)."
 else
