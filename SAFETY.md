@@ -32,8 +32,15 @@ Everything else, the actual conversion, is pure string-in / string-out.
    dependency. Recommended posture: post to a DM or a private test channel, not a real
    shared channel, until you trust the output.
 
-## Credential handling
+## macOS Quick Actions
 
+The installed Quick Actions run the CLI and, for Markdown→Slack only, synthesize a
+`⌘V` keystroke via System Events so the converted text pastes into the frontmost app.
+That keystroke needs Accessibility permission (macOS prompts on first use). It sends
+only a paste to whatever app is frontmost; it reads no input and moves no data off the
+machine. Slack→Markdown does not paste (it only rewrites the clipboard).
+
+## Credential handling
 - Slack tokens are read from an environment variable only, never committed. `.env`
   and `*.token` are gitignored.
 - No token is required for the primary Slack -> Markdown clipboard path.

@@ -106,10 +106,13 @@ Default shortcuts (set best-effort by the installer):
 | `⌥⌘S` (Cmd+Option+S) | slackmd: Slack to Markdown | `from-slack --copy` |
 | `⌃⌥⌘M` (Ctrl+Cmd+Option+M) | slackmd: Markdown to Slack | `to-slack --copy` |
 
-Each service transforms the clipboard and signals with a sound plus a notification; it
-does not paste for you. Copy, press the shortcut, then paste (`⌘V`) into the target app.
-The Markdown→Slack shortcut uses Control (`⌃⌥⌘M`) because plain `⌘M` / `⌥⌘M` is macOS
-"minimize" and would minimize the window instead.
+Slack→Markdown (`⌥⌘S`) puts Markdown on the clipboard; you then paste (`⌘V`) into your
+agent. Markdown→Slack (`⌃⌥⌘M`) converts and then pastes into the frontmost app for you,
+so press it with the Slack message box focused. Auto-paste synthesizes `⌘V` via System
+Events, so the first time you use it macOS asks to allow Accessibility for the service;
+approve it in System Settings > Privacy & Security > Accessibility. Both services signal
+with a sound plus a notification. The Markdown→Slack shortcut uses Control (`⌃⌥⌘M`)
+because plain `⌘M` / `⌥⌘M` is macOS "minimize" and would minimize the window instead.
 
 These are no-input services (they read the clipboard themselves), so they appear in the
 application Services menu and on the hotkeys, not in the right-click text-selection menu.
@@ -119,8 +122,8 @@ to activate, and an app-level shortcut can shadow it. If a shortcut is not activ
 or change it in System Settings > Keyboard > Keyboard Shortcuts > Services > General.
 First run may prompt to allow pasteboard access; allow it.
 
-Daily loop: copy in Slack, press `⌥⌘S`, then `⌘V` into your agent; copy Markdown, press
-`⌃⌥⌘M`, then `⌘V` into Slack.
+Daily loop: copy in Slack, press `⌥⌘S`, then `⌘V` into your agent; copy Markdown, focus
+the Slack message box, and press `⌃⌥⌘M` (it converts and pastes).
 
 ## Layout
 

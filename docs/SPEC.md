@@ -242,7 +242,9 @@ difference between "reads nicely" and "round-trips back into Slack as working pi
 - **Phase 2, harden Slack→MD:** [PARTIAL] auto-discovering golden-file corpus + cross-source
   consistency test in place. Mention/custom-emoji API enrichment still open.
 - **Phase 3, reverse direction (bonus, paste):** [DONE] `markdown_to_mrkdwn` + `markdown_to_html`
-  + `to-slack` CLI. HTML paste path verified in Slack.
+  + `to-slack` CLI. HTML paste path verified in Slack. The Markdown→Slack Quick Action
+  (`⌃⌥⌘M`) converts and auto-pastes (`⌘V` via System Events, Accessibility permission);
+  Slack→Markdown (`⌥⌘S`) copies for manual paste into the agent.
 - **Phase 4, high-fidelity Slack integration (optional):** [DONE] `markdown_to_blockkit`
   (Block Kit `rich_text`) + `to-blockkit` and a dry-run-by-default `post` command
   (`chat.postMessage`, stdlib urllib, env token, channel allowlist). Validated live on a
