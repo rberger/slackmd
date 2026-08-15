@@ -6,10 +6,40 @@ agents, and (bonus) convert full Markdown into properly formatted Slack output.
 - Full design, fidelity matrix, phased plan, and eval design: [`docs/SPEC.md`](docs/SPEC.md)
 - Isolation and safety model: [`SAFETY.md`](SAFETY.md)
 
-## Quick start
+## Requirements
+
+- macOS (the tool reads and writes the native pasteboard).
+- [`uv`](https://docs.astral.sh/uv/): `brew install uv`, or
+  `curl -LsSf https://astral.sh/uv/install.sh | sh`. `uv` manages the Python (3.13) and
+  the virtualenv for you, so no separate Python install is needed.
+- Optional: Docker Desktop, only if you want to run `make sandbox`.
+
+## Install
 
 ```bash
-make setup     # isolated venv (uv), Python 3.13, incl. macOS clipboard extra
+git clone git@github.com:rberger/slackmd.git
+cd slackmd
+make setup     # creates an isolated venv (uv, Python 3.13) with the macOS clipboard extra
+```
+
+Run the CLI with `uv run` from the repo directory:
+
+```bash
+uv run slackmd from-slack --copy
+```
+
+Or install it as a global `slackmd` command so it works from any directory:
+
+```bash
+uv tool install ".[macos]"
+```
+
+The usage examples below are written as `slackmd ...`; if you did not install it
+globally, prefix them with `uv run` and run from the repo directory.
+
+## Develop
+
+```bash
 make test      # unit tests
 make sandbox   # run the pure core + evals in a Docker container with NO network
 ```
