@@ -128,6 +128,14 @@ not for pasting.
   clipboard HTML is authoritative for what we can convert. Recovering render-only styling would
   need the API path.
 
+**Block Kit posting (verified live).** `chat.postMessage` with `markdown_to_blockkit` output was
+validated on a real (paid Informed) workspace: styled inline text, links, emoji, nested bullets,
+numbered ordered lists, a multi-line quote, and a code block all render correctly. One Slack
+rendering quirk: consecutive `rich_text_list` blocks are merged into a single run that adopts the
+first list's markers, so a bullet list directly followed by an ordered list showed all bullets.
+The fix is to emit an empty `rich_text_section` between adjacent top-level lists (never inside a
+nested list), which keeps the ordered list numbered; confirmed live.
+
 ---
 
 ## 3. Proposed architecture
@@ -235,8 +243,12 @@ difference between "reads nicely" and "round-trips back into Slack as working pi
   consistency test in place. Mention/custom-emoji API enrichment still open.
 - **Phase 3, reverse direction (bonus, paste):** [DONE] `markdown_to_mrkdwn` + `markdown_to_html`
   + `to-slack` CLI. HTML paste path verified in Slack.
-- **Phase 4, high-fidelity Slack integration (optional):** [TODO] classic bot-token app,
-  `markdown_to_blockkit` + `post`, and/or the `SlackEnricher` for canonical mentions/emoji.
+- **Phase 4, high-fidelity Slack integration (optional):** [DONE] `markdown_to_blockkit`
+  (Block Kit `rich_text`) + `to-blockkit` and a dry-run-by-default `post` command
+  (`chat.postMessage`, stdlib urllib, env token, channel allowlist). Validated live on a
+  real workspace: styled inline text, links, emoji, nested bullets, numbered ordered
+  lists, multi-line quote, and code block all render. The `SlackEnricher` for canonical
+  `@mentions`/custom emoji remains the one open item.
 
 Each phase is independently useful and independently testable.
 
