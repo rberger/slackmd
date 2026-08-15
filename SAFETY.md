@@ -25,10 +25,12 @@ Everything else, the actual conversion, is pure string-in / string-out.
    runs freely during development.
 3. macOS clipboard adapter (`src/slackmd/cli.py`): the only code that touches the
    pasteboard. Reversible, file-system-free.
-4. Slack adapter (future, `slack` extra): DRY-RUN BY DEFAULT. Posting requires an
-   explicit `--post` flag plus a channel allowlist. Recommended posture: use a
-   dedicated throwaway/test Slack workspace or a private test channel, never a real
-   shared channel, until the conversion is trusted.
+4. Slack poster (`src/slackmd/slack.py`, the `post` command): DRY-RUN BY DEFAULT. It
+   prints the `chat.postMessage` payload and sends nothing unless you pass `--send`.
+   `--send` reads the bot token from `SLACK_BOT_TOKEN` (environment only) and honors an
+   optional `SLACK_ALLOWED_CHANNELS` allowlist. Posting uses stdlib `urllib`, no extra
+   dependency. Recommended posture: post to a DM or a private test channel, not a real
+   shared channel, until you trust the output.
 
 ## Credential handling
 

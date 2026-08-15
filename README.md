@@ -45,6 +45,22 @@ Paste into a Slack message box. Slack's composer imports the HTML as native form
 (bold, italic, links, nested/ordered lists, quotes, code blocks). Pasting plain
 `mrkdwn` does not work in the WYSIWYG composer, which is why the HTML flavor is written.
 
+### Post to Slack (Block Kit)
+
+For programmatic posting instead of pasting, convert Markdown to Block Kit and post via
+the Slack API:
+
+```bash
+slackmd to-blockkit                    # clipboard Markdown -> Block Kit blocks JSON (stdout)
+slackmd post --channel C0XXXX          # dry-run: prints the chat.postMessage payload
+slackmd post --channel C0XXXX --send   # actually posts (needs SLACK_BOT_TOKEN)
+```
+
+`post` is dry-run by default. `--send` reads `SLACK_BOT_TOKEN` from the environment (a
+classic bot-token app with `chat:write`) and honors an optional `SLACK_ALLOWED_CHANNELS`
+allowlist. Block Kit `rich_text` preserves nested/ordered lists, quotes, code blocks,
+links, and emoji, validated live against `chat.postMessage`. See [`SAFETY.md`](SAFETY.md).
+
 ### macOS hotkeys (Quick Actions)
 
 Install two Services and pre-bind the default global shortcuts:
@@ -71,12 +87,16 @@ Daily loop: copy in Slack, press `⌥⌘S`, paste into your agent; copy Markdown
 ## Layout
 
 ```
-src/slackmd/core.py   pure conversion functions (no I/O)  <- safe to run anywhere
-src/slackmd/cli.py    thin CLI + macOS clipboard adapter  <- only touches pasteboard
-evals/                golden-file conversion corpus
-docs/SPEC.md          the plan
+src/slackmd/core.py     pure conversion functions (no I/O)  <- safe to run anywhere
+src/slackmd/sources.py  clipboard source detection + fidelity router (pure)
+src/slackmd/cli.py      thin CLI + macOS clipboard adapter  <- only touches pasteboard
+src/slackmd/slack.py    Slack API poster (chat.postMessage, dry-run by default)
+evals/                  golden-file conversion corpus
+docs/SPEC.md            the plan
 ```
 
-Status: both directions built and validated against real Slack (Slack HTML/Quill/text
-to Markdown, and Markdown to Slack via HTML paste), with macOS hotkeys. Block Kit API
-posting is the remaining optional phase. See [`docs/SPEC.md`](docs/SPEC.md) section 2.5.
+Status: complete. Both clipboard directions validated against real Slack (Slack
+HTML/Quill/text to Markdown, and Markdown to Slack via HTML paste), plus Block Kit
+posting via `chat.postMessage` (validated live), with macOS hotkeys. The optional
+`SlackEnricher` for canonical @mentions and custom emoji is the one remaining item.
+See [`docs/SPEC.md`](docs/SPEC.md).
