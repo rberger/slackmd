@@ -4,7 +4,9 @@ Working name: `slackmd`. A macOS clipboard tool (plus optional Slack-app layer) 
 copied Slack message into clean Markdown for feeding to Kiro or other agents, and (bonus)
 converts full Markdown into properly formatted Slack output.
 
-Status: draft v1, pending Rob's decisions in the "Open decisions" section.
+Status: v2. Both directions built and validated against real Slack (see section 2.5).
+The original research assumptions in 2.1 to 2.4 are preserved; 2.5 records where the build
+confirmed or corrected them.
 
 ---
 
@@ -87,6 +89,44 @@ mentions or custom-emoji images. To recover those you need the Slack API (see 2.
 - For the reverse direction, a Slack slash-command app is the wrong tool (it inverts the
   workflow and needs an always-on socket daemon). If we post to Slack, the CLI should hold a
   classic bot token and call `chat.postMessage` directly (no Socket Mode, no daemon).
+
+### 2.5 Verified findings from the build (2026-08-14)
+
+**The copy method determines the source.** The 2.1 assumption (only `public.html`) was
+incomplete. Slack puts different flavors on the pasteboard depending on how you copy:
+
+- **Select the message text and Cmd-C** yields `public.html` (Slack's rendered DOM). This
+  build's Slack emits clean semantic tags (`b`, `i`, `ul`, `li`, `code`, emoji
+  `<img alt=":shortcode:">`) with no `data-stringify-*` wrappers, so the pre-cleaner is simpler
+  than 2.1 assumed.
+- **The "Copy message" hover action (⌘C)** yields NO `public.html`. Instead Slack packs two rich
+  flavors into Chromium's `org.chromium.web-custom-data` blob: `text/markdown` (Slack's own
+  near-CommonMark; it only over-escapes `\(` `\)`) and `slack/texty` (a Quill Delta with explicit
+  `bold`/`italic`/`link` inline attributes and `list`/`blockquote` block attributes on the
+  terminating newline). The `public.utf8-plain-text` flavor is rendered text, not usable.
+
+**Multi-source router (implemented).** `slackmd from-slack` gathers every available flavor and
+routes by fidelity: `text/markdown` > `slack/texty` (Quill) > `public.html` > `text/plain`. All
+three rich sources of the same message were verified to converge on the same content. The
+`web-custom-data` blob is a `base::Pickle`; `parse_chromium_custom_data` decodes it (pure, so it
+runs in the sandbox).
+
+**HTML paste is the reverse-direction transport (verified).** Pasting plain `mrkdwn` into Slack's
+WYSIWYG composer renders literally (asterisks, underscores, and `>` all shown as text; only bare
+URLs auto-link). The working path is symmetric to the read side: write `public.html` to the
+clipboard and Slack's composer imports it as native formatting (bold, italic, strike, inline
+code, links, nested/ordered lists, blockquote, code block). `slackmd to-slack --copy` writes
+`public.html` (from `markdown_to_html`, with `breaks=True` so multi-line quotes keep their line
+breaks) plus a `mrkdwn` plain-text fallback. `mrkdwn` text remains the target for API posting,
+not for pasting.
+
+**Fidelity notes.**
+- Our HTML to Markdown output matched Slack's own `text/markdown` for the same message, and was
+  cleaner: no over-escaped parens, and correct emphasis boundaries where Slack emitted an
+  ambiguous `*****` run.
+- A line's bold-ness in Slack's live UI can differ from the copied HTML in either direction; the
+  clipboard HTML is authoritative for what we can convert. Recovering render-only styling would
+  need the API path.
 
 ---
 
@@ -186,17 +226,16 @@ difference between "reads nicely" and "round-trips back into Slack as working pi
 
 ## 6. Phased plan (tracer bullets)
 
-- **Phase 0, spike (0.5 day):** confirm the pasteboard reality on Rob's Slack build. Rob copies a
-  real Slack message; I inspect `NSPasteboard.types()` and dump the `public.html`. De-risks the
-  whole primary path before writing conversion code.
-- **Phase 1, tracer bullet (primary, end to end):** `slack_html_to_markdown` + `from-slack` CLI +
-  one Quick Action hotkey. Copy a Slack message, hit the hotkey, paste Markdown into Kiro. Ships
-  the core value with zero Slack token.
-- **Phase 2, harden Slack→MD:** the eval corpus and feature matrix, blank-line code fences,
-  emoji shortcodes, mention plain-text handling. Fidelity report.
-- **Phase 3, reverse direction (bonus, paste):** `markdown_to_mrkdwn` + `to-slack` CLI + second
-  hotkey. Round-trip stability evals.
-- **Phase 4, high-fidelity Slack integration (optional):** classic bot-token app,
+- **Phase 0, spike (0.5 day):** [DONE] confirmed the pasteboard reality on Rob's Slack build.
+  Discovered the copy-method / source split in 2.5.
+- **Phase 1, tracer bullet (primary, end to end):** [DONE] `slack_html_to_markdown` + `from-slack`
+  CLI. Validated against a real rich message and a committed golden case; multi-source router
+  added (2.5). Quick Action hotkey still to do.
+- **Phase 2, harden Slack→MD:** [PARTIAL] auto-discovering golden-file corpus + cross-source
+  consistency test in place. Mention/custom-emoji API enrichment still open.
+- **Phase 3, reverse direction (bonus, paste):** [DONE] `markdown_to_mrkdwn` + `markdown_to_html`
+  + `to-slack` CLI. HTML paste path verified in Slack.
+- **Phase 4, high-fidelity Slack integration (optional):** [TODO] classic bot-token app,
   `markdown_to_blockkit` + `post`, and/or the `SlackEnricher` for canonical mentions/emoji.
 
 Each phase is independently useful and independently testable.
