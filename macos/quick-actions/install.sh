@@ -199,6 +199,28 @@ WFLOW
 make_service "slackmd: Slack to Markdown" "$CLI from-slack --copy"
 make_service "slackmd: Markdown to Slack" "$CLI to-slack --copy"
 
+# Best-effort: pre-bind the recommended global shortcuts by writing the Services
+# key_equivalent into the pbs preference domain. macOS may require a logout for this
+# to take effect, and an app-level shortcut can shadow it, so the manual assignment in
+# System Settings > Keyboard > Keyboard Shortcuts > Services is the reliable fallback.
+# key_equivalent modifiers: @ = cmd, ~ = option, $ = shift, ^ = control.
+bind_hotkey() {
+  local menu="$1" keq="$2"
+  local svc="(null) - $menu - runWorkflowAsService"
+  local plist="{ enabled_context_menu = 1; enabled_services_menu = 1; key_equivalent = \"$keq\"; presentation_modes = { ContextMenu = 1; ServicesMenu = 1; }; }"
+  defaults write pbs NSServicesStatus -dict-add "$svc" "$plist" 2>/dev/null || true
+}
+bind_hotkey "slackmd: Slack to Markdown" "@~s"   # Cmd+Option+S
+bind_hotkey "slackmd: Markdown to Slack" "@~m"   # Cmd+Option+M
+
 # Nudge the services registry so the new Quick Actions appear.
 /System/Library/CoreServices/pbs -flush 2>/dev/null || true
-echo "done. Assign hotkeys in System Settings > Keyboard > Keyboard Shortcuts > Services > General."
+
+echo
+if defaults read pbs NSServicesStatus 2>/dev/null | grep -q "slackmd"; then
+  echo "pre-bound shortcuts: Cmd+Option+S (Slack to Markdown), Cmd+Option+M (Markdown to Slack)."
+  echo "If a shortcut is not active, set it in System Settings > Keyboard > Keyboard"
+  echo "Shortcuts > Services > General (a logout may be needed for the pre-bind to apply)."
+else
+  echo "assign shortcuts in System Settings > Keyboard > Keyboard Shortcuts > Services > General."
+fi
