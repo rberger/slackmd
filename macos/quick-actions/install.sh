@@ -29,6 +29,11 @@ make_service() {
   local u1 u2 u3
   u1="$(uuidgen)"; u2="$(uuidgen)"; u3="$(uuidgen)"
 
+  # Wrap the command so the user gets a macOS notification (the CLI writes silently
+  # to the clipboard, so without this a successful run looks like nothing happened).
+  local body
+  body="if ${command}; then osascript -e 'display notification \"Converted, now on your clipboard\" with title \"${name}\"'; else osascript -e 'display notification \"Nothing to convert on the clipboard\" with title \"${name}\"'; fi"
+
   cat > "$wf/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -103,7 +108,7 @@ PLIST
 				<key>ActionParameters</key>
 				<dict>
 					<key>COMMAND_STRING</key>
-					<string>$command</string>
+					<string>$body</string>
 					<key>CheckedForUserDefaultShell</key>
 					<true/>
 					<key>inputMethod</key>
