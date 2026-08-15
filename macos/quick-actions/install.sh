@@ -29,10 +29,13 @@ make_service() {
   local u1 u2 u3
   u1="$(uuidgen)"; u2="$(uuidgen)"; u3="$(uuidgen)"
 
-  # Wrap the command so the user gets a macOS notification (the CLI writes silently
-  # to the clipboard, so without this a successful run looks like nothing happened).
+  # Wrap the command with feedback: the CLI writes to the clipboard silently, so play a
+  # sound (works regardless of notification permissions) plus a macOS notification, so a
+  # successful run is perceptible. Keep the script free of &, <, > so it needs no XML
+  # escaping in the workflow plist (afplay/osascript run foreground; their output is
+  # discarded by the Quick Action).
   local body
-  body="if ${command}; then osascript -e 'display notification \"Converted, now on your clipboard\" with title \"${name}\"'; else osascript -e 'display notification \"Nothing to convert on the clipboard\" with title \"${name}\"'; fi"
+  body="if ${command}; then afplay /System/Library/Sounds/Glass.aiff; osascript -e 'display notification \"Converted, now on your clipboard\" with title \"${name}\"'; else afplay /System/Library/Sounds/Basso.aiff; osascript -e 'display notification \"Nothing to convert on the clipboard\" with title \"${name}\"'; fi"
 
   cat > "$wf/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
