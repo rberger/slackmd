@@ -306,8 +306,9 @@ def markdown_to_mrkdwn(md: str, *, escape: bool = True) -> str:
     return _tidy(block(tree))
 
 
-def _mrkdwn_table(node, esc) -> str:
-    # Slack has no table; render an aligned monospace block inside a code fence.
+def _bk_table_text(node) -> str:
+    # Slack has no table type; render an aligned monospace block (shared by the
+    # mrkdwn code-fence path and the Block Kit rich_text_preformatted path).
     rows: list[list[str]] = []
     for section in node.children:  # thead / tbody
         for tr in section.children:
@@ -328,9 +329,14 @@ def _mrkdwn_table(node, esc) -> str:
             widths[i] = max(widths[i], len(cell))
     out = []
     for r in rows:
-        padded = [r[i].ljust(widths[i]) if i < len(r) else " " * widths[i] for i in range(ncol)]
+        padded = [(r[i] if i < len(r) else "").ljust(widths[i]) for i in range(ncol)]
         out.append("  ".join(padded).rstrip())
-    return "```\n" + "\n".join(out) + "\n```"
+    return "\n".join(out)
+
+
+def _mrkdwn_table(node, esc) -> str:
+    body = _bk_table_text(node)
+    return "```\n" + body + "\n```" if body else ""
 
 
 def _plain(node) -> str:
@@ -342,5 +348,128 @@ def _plain(node) -> str:
 
 
 def markdown_to_blockkit(md: str) -> list[dict]:
-    """Convert CommonMark into Slack Block Kit ``rich_text`` JSON (Phase 4)."""
-    raise NotImplementedError("Phase 4")
+    """Convert CommonMark into Slack Block Kit blocks (Phase 4, highest fidelity).
+
+    Returns a list of top-level blocks for ``chat.postMessage(blocks=...)``: a
+    ``rich_text`` block carries sections, ``rich_text_list`` (with ``indent`` for
+    nesting), ``rich_text_quote`` and ``rich_text_preformatted``; headings become
+    ``header`` blocks and ``---`` becomes a ``divider``. Inline emphasis is flattened
+    onto per-leaf ``style`` flags, links become ``link`` leaves, and ``:name:`` becomes
+    an ``emoji`` leaf. No Slack user/channel IDs are available from Markdown, so those
+    entities are out of scope here (see the SlackEnricher in docs/SPEC.md 4.5).
+    """
+    from markdown_it import MarkdownIt
+    from markdown_it.tree import SyntaxTreeNode
+
+    def style_flags(style: dict) -> dict:
+        return {k: True for k in ("bold", "italic", "strike", "code") if style.get(k)}
+
+    def plain_text_of(node) -> str:
+        if node.type in ("text", "code_inline"):
+            return node.content
+        if node.type in ("softbreak", "hardbreak"):
+            return "\n"
+        return "".join(plain_text_of(c) for c in node.children)
+
+    def emoji_split(text: str, style: dict, out: list) -> None:
+        s = style_flags(style)
+        pos = 0
+        for m in re.finditer(r":([a-z0-9_+'-]+):", text):
+            if m.start() > pos:
+                leaf = {"type": "text", "text": text[pos:m.start()]}
+                if s:
+                    leaf["style"] = s
+                out.append(leaf)
+            out.append({"type": "emoji", "name": m.group(1)})
+            pos = m.end()
+        if pos < len(text):
+            leaf = {"type": "text", "text": text[pos:]}
+            if s:
+                leaf["style"] = s
+            out.append(leaf)
+
+    def render_inline(children, style: dict, out: list) -> None:
+        for c in children:
+            t = c.type
+            if t == "text":
+                emoji_split(c.content, style, out)
+            elif t == "code_inline":
+                out.append({"type": "text", "text": c.content, "style": style_flags({**style, "code": True})})
+            elif t in ("softbreak", "hardbreak"):
+                out.append({"type": "text", "text": "\n"})
+            elif t == "strong":
+                render_inline(c.children, {**style, "bold": True}, out)
+            elif t == "em":
+                render_inline(c.children, {**style, "italic": True}, out)
+            elif t == "s":
+                render_inline(c.children, {**style, "strike": True}, out)
+            elif t == "link":
+                leaf = {"type": "link", "url": c.attrs.get("href", ""), "text": plain_text_of(c)}
+                s = style_flags(style)
+                if s:
+                    leaf["style"] = s
+                out.append(leaf)
+            elif t == "image":
+                emoji_split(c.attrs.get("alt") or plain_text_of(c), style, out)
+            else:
+                render_inline(c.children, style, out)
+
+    def leaves_of(block) -> list:
+        inline = next((c for c in block.children if c.type == "inline"), None)
+        out: list = []
+        if inline is not None:
+            render_inline(inline.children, {}, out)
+        return out or [{"type": "text", "text": ""}]
+
+    def emit_list(node, ordered: bool, indent: int, out: list) -> None:
+        style = "ordered" if ordered else "bullet"
+        items: list = []
+
+        def flush():
+            if items:
+                out.append({"type": "rich_text_list", "style": style, "indent": indent, "elements": list(items)})
+                items.clear()
+
+        for li in node.children:
+            para = next((c for c in li.children if c.type == "paragraph"), None)
+            items.append({"type": "rich_text_section", "elements": leaves_of(para) if para else [{"type": "text", "text": ""}]})
+            for c in li.children:
+                if c.type in ("bullet_list", "ordered_list"):
+                    flush()
+                    emit_list(c, c.type == "ordered_list", indent + 1, out)
+        flush()
+
+    tree = SyntaxTreeNode(MarkdownIt("gfm-like").disable("linkify").parse(md))
+    blocks: list = []
+    rt: list = []
+
+    def flush_rt():
+        if rt:
+            blocks.append({"type": "rich_text", "elements": list(rt)})
+            rt.clear()
+
+    for node in tree.children:
+        t = node.type
+        if t == "heading":
+            flush_rt()
+            blocks.append({"type": "header", "text": {"type": "plain_text", "text": plain_text_of(node)[:150], "emoji": True}})
+        elif t == "hr":
+            flush_rt()
+            blocks.append({"type": "divider"})
+        elif t == "paragraph":
+            rt.append({"type": "rich_text_section", "elements": leaves_of(node)})
+        elif t in ("bullet_list", "ordered_list"):
+            emit_list(node, t == "ordered_list", 0, rt)
+        elif t == "blockquote":
+            for c in node.children:
+                if c.type == "paragraph":
+                    rt.append({"type": "rich_text_quote", "elements": leaves_of(c)})
+                elif c.type in ("bullet_list", "ordered_list"):
+                    emit_list(c, c.type == "ordered_list", 0, rt)
+        elif t in ("fence", "code_block"):
+            rt.append({"type": "rich_text_preformatted", "elements": [{"type": "text", "text": node.content.rstrip("\n")}]})
+        elif t == "table":
+            rt.append({"type": "rich_text_preformatted", "elements": [{"type": "text", "text": _bk_table_text(node)}]})
+
+    flush_rt()
+    return blocks

@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .core import markdown_to_html, markdown_to_mrkdwn
+from .core import markdown_to_blockkit, markdown_to_html, markdown_to_mrkdwn
 from .sources import route
 
 
@@ -85,6 +85,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Do not entity-escape & < > (for pasting into the composer)",
     )
 
+    sub.add_parser(
+        "to-blockkit",
+        help="Convert Markdown (clipboard) to Block Kit blocks JSON (for chat.postMessage)",
+    )
+
     args = parser.parse_args(argv)
 
     if args.cmd == "from-slack":
@@ -116,6 +121,19 @@ def main(argv: list[str] | None = None) -> int:
             # so write HTML as the rich flavor with mrkdwn as the plain-text fallback.
             _write_clipboard_rich(markdown_to_html(md), mrkdwn)
         print(mrkdwn)
+        return 0
+
+    if args.cmd == "to-blockkit":
+        import json
+
+        from AppKit import NSPasteboard
+
+        pb = NSPasteboard.generalPasteboard()
+        md = pb.stringForType_("public.utf8-plain-text")
+        if not md:
+            print("No Markdown text on the clipboard.", file=sys.stderr)
+            return 1
+        print(json.dumps({"blocks": markdown_to_blockkit(md)}, indent=2))
         return 0
 
     parser.print_help()
