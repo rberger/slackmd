@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.DS_Store
+# never commit tokens
+.env
+*.token
+# local Kiro CLI tooling config
+.kiro/
