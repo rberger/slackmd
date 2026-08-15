@@ -7,6 +7,7 @@ Slack I/O live in adapters (`slackmd.cli`) and are guarded; see SAFETY.md.
 from .core import (
     clean_slack_markdown,
     markdown_to_blockkit,
+    markdown_to_html,
     markdown_to_mrkdwn,
     mrkdwn_to_markdown,
     quill_to_markdown,
@@ -20,6 +21,7 @@ __all__ = [
     "quill_to_markdown",
     "mrkdwn_to_markdown",
     "markdown_to_mrkdwn",
+    "markdown_to_html",
     "markdown_to_blockkit",
     "route",
     "parse_chromium_custom_data",

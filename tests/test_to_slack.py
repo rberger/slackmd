@@ -1,6 +1,6 @@
 """markdown_to_mrkdwn (reverse direction) tests. Synthetic, safe to commit."""
 
-from slackmd import markdown_to_mrkdwn
+from slackmd import markdown_to_html, markdown_to_mrkdwn
 
 
 def test_inline_emphasis_mapping():
@@ -60,3 +60,16 @@ def test_table_becomes_monospace_block():
     out = markdown_to_mrkdwn(md)
     assert out.startswith("```") and out.endswith("```")
     assert "a" in out and "22" in out
+
+
+def test_markdown_to_html_for_paste():
+    html = markdown_to_html("# T\n\n**b** [x](https://y.io)\n\n- a\n- b")
+    assert "<h1>" in html
+    assert "<strong>b</strong>" in html
+    assert '<a href="https://y.io">x</a>' in html
+    assert "<ul>" in html and "<li>a</li>" in html
+
+
+def test_html_preserves_multiline_blockquote():
+    html = markdown_to_html("> a quoted line\n> a second quoted line")
+    assert "<br" in html  # soft newline preserved so Slack shows two quoted lines

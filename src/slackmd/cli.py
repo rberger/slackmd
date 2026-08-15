@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .core import markdown_to_mrkdwn
+from .core import markdown_to_html, markdown_to_mrkdwn
 from .sources import route
 
 
@@ -47,6 +47,16 @@ def _write_clipboard_text(text: str) -> None:
     pb = NSPasteboard.generalPasteboard()
     pb.clearContents()
     pb.setString_forType_(text, "public.utf8-plain-text")
+
+
+def _write_clipboard_rich(html: str, plain: str) -> None:
+    """Write HTML (for Slack's composer to import) with a plain-text fallback."""
+    from AppKit import NSPasteboard
+
+    pb = NSPasteboard.generalPasteboard()
+    pb.declareTypes_owner_(["public.html", "public.utf8-plain-text"], None)
+    pb.setString_forType_(html, "public.html")
+    pb.setString_forType_(plain, "public.utf8-plain-text")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -100,10 +110,12 @@ def main(argv: list[str] | None = None) -> int:
         if not md:
             print("No Markdown text on the clipboard.", file=sys.stderr)
             return 1
-        out = markdown_to_mrkdwn(md, escape=not args.no_escape)
+        mrkdwn = markdown_to_mrkdwn(md, escape=not args.no_escape)
         if args.copy:
-            _write_clipboard_text(out)
-        print(out)
+            # Slack's composer imports HTML on paste (plain mrkdwn renders literally),
+            # so write HTML as the rich flavor with mrkdwn as the plain-text fallback.
+            _write_clipboard_rich(markdown_to_html(md), mrkdwn)
+        print(mrkdwn)
         return 0
 
     parser.print_help()

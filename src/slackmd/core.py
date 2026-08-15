@@ -177,6 +177,19 @@ def _mrkdwn_escape(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def markdown_to_html(md: str) -> str:
+    """Render CommonMark to HTML, the rich flavor Slack's composer imports on paste.
+
+    Pasting plain ``mrkdwn`` into Slack's WYSIWYG composer renders literally; pasting
+    HTML makes the composer adopt the formatting (bold, links, lists, code, quotes).
+    """
+    from markdown_it import MarkdownIt
+
+    # breaks=True -> soft newlines become <br>, matching Slack's newline-as-line-break
+    # semantics (otherwise multi-line blockquotes/paragraphs collapse onto one line).
+    return MarkdownIt("gfm-like", {"breaks": True}).disable("linkify").render(md)
+
+
 def markdown_to_mrkdwn(md: str, *, escape: bool = True) -> str:
     """Convert CommonMark into Slack ``mrkdwn`` text (Phase 3, reverse direction).
 
