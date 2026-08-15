@@ -459,6 +459,11 @@ def markdown_to_blockkit(md: str) -> list[dict]:
         elif t == "paragraph":
             rt.append({"type": "rich_text_section", "elements": leaves_of(node)})
         elif t in ("bullet_list", "ordered_list"):
+            if rt and rt[-1].get("type") == "rich_text_list":
+                # Slack merges adjacent rich_text_list blocks into one run (taking the
+                # first list's markers). An empty section between them keeps a following
+                # ordered list numbered instead of inheriting the bullet style.
+                rt.append({"type": "rich_text_section", "elements": [{"type": "text", "text": "\n"}]})
             emit_list(node, t == "ordered_list", 0, rt)
         elif t == "blockquote":
             for c in node.children:

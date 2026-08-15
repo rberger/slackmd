@@ -73,3 +73,19 @@ def test_emoji_leaf():
 def test_hr_becomes_divider():
     blocks = markdown_to_blockkit("a\n\n---\n\nb")
     assert any(b["type"] == "divider" for b in blocks)
+
+
+def test_adjacent_lists_get_separator():
+    # A bullet list immediately followed by an ordered list gets an empty section
+    # between them so Slack keeps the ordered list numbered.
+    els = markdown_to_blockkit("- a\n\n1. one\n2. two")[0]["elements"]
+    types = [e["type"] for e in els]
+    assert types == ["rich_text_list", "rich_text_section", "rich_text_list"]
+    assert els[0]["style"] == "bullet"
+    assert els[2]["style"] == "ordered"
+
+
+def test_nested_list_has_no_separator():
+    # Nesting relies on adjacency, so a nested list must NOT be separated.
+    els = markdown_to_blockkit("- a\n    - nested\n- b")[0]["elements"]
+    assert all(e["type"] == "rich_text_list" for e in els)
